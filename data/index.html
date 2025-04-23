@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ROTOM Turbine Controller</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* --- General Styles --- */
+    body { font-family: sans-serif; padding: 1rem; background: #f7f7f7; margin: 0; }
+    h2 { text-align: center; }
+    .tabs { display: flex; gap: 10px; justify-content: center; margin-bottom: 1rem; }
+    .tab-btn { padding: 10px 20px; border: none; background: #ddd; cursor: pointer; border-radius: 6px; }
+    .tab-btn.active { background: #007bff; color: white; }
+    /* --- Tab Visibility Control --- */
+    .tab-content { display: none; padding: 5px; } /* Hide by default */
+    .tab-content.active { display: block; } /* Show only active tab */
+    /* --- Buttons and Input Styles --- */
+    .btn { display: block; width: 100%; padding: 10px; font-size: 1rem; margin: 10px 0; border: none; border-radius: 6px; color: white; cursor: pointer; }
+    .btn-glow-on { background: #28a745; } .btn-glow-off { background: #dc3545; } .btn-starter { background: #007bff; } .btn-power { background: #17a2b8; } .btn-stop { background: #ff4136; }
+    .row { display: flex; gap: 10px; margin: 10px 0; } .row .btn { flex: 1; margin: 0; }
+    label { display: block; margin: 10px 0 5px 0; }
+    input[type=range] { width: 100%; margin-bottom: 15px; }
+    /* --- Status Box Layout --- */
+    .status-box { background: #fff; border: 1px solid #ccc; padding: 15px; margin-top: 1rem; border-radius: 8px; display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; gap: 15px; }
+    /* --- Item Sizing --- */
+    .status-item, .gauge-wrapper { text-align: center; padding: 0; box-sizing: border-box; width: calc(50% - 8px); max-width: 190px; min-width: 130px; flex-shrink: 1; flex-grow: 0; }
+    .status-item span { font-weight: bold; color: #007bff; display: block; font-size: 1.1em; margin-top: 4px; word-wrap: break-word; }
+    .gauge-title { font-size: 0.8em; color: #555; margin-bottom: 2px; white-space: nowrap; }
+    /* --- SVG Gauge Styles --- */
+    .gauge-container { width: 100%; display: block; }
+    .gauge-container > svg { display: block; width: 100%; height: auto; max-width: 100%; margin: 0 auto; overflow: visible; }
+    .gauge-background { fill: none; stroke: #eee; stroke-width: 12; }
+    .gauge-value { fill: none; stroke: #007bff; stroke-width: 12; stroke-linecap: round; }
+    #gauge-value-temp, #gauge-value-temp2 { stroke: #ff7f0e; } #gauge-value-turbineRPM, #gauge-value-turbineRPM2 { stroke: #dc3545; } #gauge-value-pumpRPM, #gauge-value-pumpRPM2 { stroke: #6f42c1; } #gauge-value-starter, #gauge-value-starter2 { stroke: #007bff; } #gauge-value-pump, #gauge-value-pump2 { stroke: #28a745; }
+    .gauge-label { fill: #333; font-family: sans-serif; font-size: 18px; font-weight: bold; text-anchor: middle; }
+    .gauge-units { fill: #555; font-family: sans-serif; font-size: 9px; text-anchor: middle; }
+    /* --- Media Query --- */
+    @media (max-width: 340px) { .status-item, .gauge-wrapper { width: 90%; } }
+  </style>
+</head>
+<body>
+  <h2>ROTOM Turbine Controller</h2>
+
+  <div class="tabs"> <button class="tab-btn active" onclick="showTab('parameters', this)">Parameters</button> <button class="tab-btn" onclick="showTab('control', this)">Control</button> </div>
+
+  <!-- Parameters Tab Content -->
+  <div id="parameters" class="tab-content active">
+    <!-- Buttons and Slider -->
+    <div class="row"> <button class="btn btn-glow-on" onclick="sendCommand('glow:1')">Glow ON</button> <button class="btn btn-glow-off" onclick="sendCommand('glow:0')">Glow OFF</button> </div>
+    <div class="row"> <button class="btn btn-starter" onclick="sendCommand('starter:1100')">Starter ON (1100us)</button> <button class="btn btn-starter" onclick="sendCommand('starter:1000')">Starter OFF</button> </div>
+    <label>Pump Duty (us): <span id="pumpValue">1000</span></label> <input type="range" min="1000" max="2000" step="10" value="1000" oninput="updatePump(this.value)">
+
+    <!-- Monitor Window for Parameters Tab -->
+    <div class="status-box">
+        <div class="status-item">State<span id="status-state">-</span></div>
+        <div class="status-item">Glow<span id="status-glow">-</span></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Temperature</div><div id="gauge-temp" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-temp" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-temp" class="gauge-label" x="50" y="45">0.0</text><text class="gauge-units" x="50" y="55">°C</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Turbine RPM</div><div id="gauge-turbineRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-turbineRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-turbineRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Starter PWM</div><div id="gauge-starter" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-starter" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-starter" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Pump PWM</div><div id="gauge-pump" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pump" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pump" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Power In</div><div id="gauge-power" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-power" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-power" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Throttle In</div><div id="gauge-throttle" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-throttle" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-throttle" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Pump RPM</div><div id="gauge-pumpRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pumpRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pumpRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
+    </div>
+  </div>
+
+  <!-- Control Tab Content -->
+  <div id="control" class="tab-content"> <!-- ID is correct, CSS hides it initially -->
+    <!-- Buttons -->
+    <div class="row"> <button class="btn btn-power" onclick="sendCommand('power:1')">System Power ON</button> <button class="btn btn-power" onclick="sendCommand('power:0')">System Power OFF</button> </div>
+    <div class="row"> <!-- Optional Emergency Stop --> </div>
+
+    <!-- Monitor Window for Control Tab (Ensure FULL structure and IDs ending in '2') -->
+    <div class="status-box">
+        <div class="status-item">State<span id="status-state2">-</span></div>
+        <div class="status-item">Glow<span id="status-glow2">-</span></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Temperature</div><div id="gauge-temp2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-temp2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-temp2" class="gauge-label" x="50" y="45">0.0</text><text class="gauge-units" x="50" y="55">°C</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Turbine RPM</div><div id="gauge-turbineRPM2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-turbineRPM2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-turbineRPM2" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Starter PWM</div><div id="gauge-starter2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-starter2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-starter2" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Pump PWM</div><div id="gauge-pump2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pump2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pump2" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Power In</div><div id="gauge-power2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-power2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-power2" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Throttle In</div><div id="gauge-throttle2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-throttle2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-throttle2" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+        <div class="gauge-wrapper"><div class="gauge-title">Pump RPM</div><div id="gauge-pumpRPM2" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pumpRPM2" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pumpRPM2" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
+    </div>
+  </div>
+
+  <script>
+    let ws;
+
+    // --- Gauge Update Function (Stable version with safety check) ---
+    function setGaugeValue(baseId, value, min, max) {
+      const valuePath = document.getElementById(`gauge-value-${baseId}`);
+      const label = document.getElementById(`gauge-label-${baseId}`);
+      if (!valuePath || !label) return;
+      value = parseFloat(value); if (isNaN(value)) value = min;
+      value = Math.max(min, Math.min(max, value));
+      const normalizedValue = (max - min === 0) ? 0 : (value - min) / (max - min);
+      const angle = normalizedValue * Math.PI;
+      const x = 50 - Math.cos(angle) * 45; const y = 50 - Math.sin(angle) * 45;
+      const largeArcFlag = 0; const sweepFlag = 1;
+      const d = `M 5 50 A 45 45 0 ${largeArcFlag} ${sweepFlag} ${x} ${y}`;
+      try {
+          valuePath.setAttribute('d', d);
+          label.textContent = (typeof baseId === 'string' && baseId.includes('temp')) ? value.toFixed(1) : Math.round(value);
+      } catch (e) { console.error(`Error updating gauge ${baseId}:`, e); }
+    }
+
+    // --- WebSocket Initialization ---
+    function initWebSocket() {
+      ws = new WebSocket("ws://" + window.location.hostname + "/ws");
+      ws.onopen = function() { console.log("WebSocket Connected"); };
+      ws.onclose = function() { console.log("WebSocket Disconnected"); setTimeout(initWebSocket, 5000); };
+      ws.onerror = function(error) { console.error("WebSocket Error:", error); };
+      ws.onmessage = function(evt) {
+        try {
+          const data = JSON.parse(evt.data);
+          const stateNames = ["IDLE", "ARMED", "GLOW_ON", "STARTER_ON", "FUEL_RAMP", "IGNITION_CHECK", "RUNNING", "COOLING", "ERROR_STOP"];
+          const statusKeys = ["state", "glow"];
+          const gaugeDefs = { temp: { min: 0, max: 1000 }, turbineRPM: { min: 0, max: 180000 }, starter: { min: 1000, max: 2000 }, pump: { min: 1000, max: 2000 }, power: { min: 900, max: 2100 }, throttle: { min: 900, max: 2100 }, pumpRPM: { min: 0, max: 30000 } };
+
+          // Update Text Status
+          statusKeys.forEach(k => {
+            if (data.hasOwnProperty(k)) {
+              let v = data[k];
+              if (k === "state") { v = (v >= 0 && v < stateNames.length) ? stateNames[v] : "Unknown(" + v + ")"; } else if (k === "glow") { v = (v === "ON" || v === 1) ? "ON" : "OFF"; }
+              const el1 = document.getElementById('status-' + k); if (el1) el1.innerText = v;
+              const el2 = document.getElementById('status-' + k + '2'); if (el2) el2.innerText = v;
+            }
+          });
+
+          // Update SVG Gauges
+          Object.keys(gaugeDefs).forEach(key => {
+            if (data.hasOwnProperty(key)) {
+              const def = gaugeDefs[key]; const value = data[key];
+              setGaugeValue(key, value, def.min, def.max);
+              setGaugeValue(key + '2', value, def.min, def.max); // Update corresponding gauge in control tab
+            }
+          });
+        } catch (e) { console.error("Failed to parse WebSocket message:", e, evt.data); }
+      };
+    }
+
+    // --- Control Functions ---
+    function sendCommand(cmd) {
+      if (ws && ws.readyState === WebSocket.OPEN) { ws.send(cmd); }
+      else { console.error("WebSocket not connected."); }
+    }
+
+    function updatePump(val) {
+      document.getElementById("pumpValue").innerText = val;
+      const numVal = parseFloat(val);
+      setGaugeValue('pump', numVal, 1000, 2000); setGaugeValue('pump2', numVal, 1000, 2000);
+      sendCommand("pump:" + val);
+    }
+
+    // --- Tab Switching Function (with logging) ---
+    function showTab(tabId, clickedButtonElement) {
+      console.log(`Switching to tab: ${tabId}`); // Log which tab is being activated
+
+      // Hide all tab content
+      document.querySelectorAll(".tab-content").forEach(div => {
+        div.classList.remove("active");
+      });
+      // Deactivate all tab buttons
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.remove("active");
+      });
+
+      // Activate target tab content
+      const targetContent = document.getElementById(tabId);
+      if (targetContent) {
+        targetContent.classList.add("active");
+        console.log(`Activated content: #${tabId}`);
+      } else {
+        console.error(`Content element not found: #${tabId}`); // Log error if content div is missing
+      }
+
+      // Activate clicked button
+      if (clickedButtonElement) {
+        clickedButtonElement.classList.add("active");
+      } else {
+         console.error("Clicked button element not provided to showTab function.");
+      }
+    }
+
+    // --- Initialize ---
+    window.onload = initWebSocket;
+
+    // Optional: Make functions globally accessible if needed (unlikely necessary here)
+    // window.sendCommand = sendCommand;
+    // window.updatePump = updatePump;
+    // window.showTab = showTab;
+
+  </script>
+</body>
+</html>
