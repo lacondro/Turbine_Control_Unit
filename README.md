@@ -13,7 +13,7 @@
 
 사용자가 RC 조종기의 **Power 스위치**를 올리거나 웹 UI에서 **System Power ON** 버튼을 누르면, 시스템은 `ARMED` 상태가 되며 아래의 자동 시동 절차를 시작합니다.
 
-1. **`GLOW_ON` (예열)**: 먼저 예열 플러그(Glow Plug)가 켜져 3초(🔴**`Glow On Time`**) 동안 연소실을 데웁니다.
+1. **`GLOW_ON` (예열)**: 먼저 예열 플러그(Glow Plug)가 켜져 3초(🔴`Glow On Time`) 동안 연소실을 데웁니다.
 2. **`STARTER_ON` (터빈 회전)**: 예열이 끝나면 스타터 모터가 🔴**`Target Starter PWM`**으로 작동하여 터빈을 돌리기 시작합니다. 모터는 2초(🔴**`Starter Ramp Time`**)에 걸쳐 점차 목표 속도까지 가속한 후, 1초간 대기합니다.
 3. **`FUEL_RAMP` (연료 분사)**: 스타터 모터가 안정되면, 연료 펌프가 🔴**`Start Pump PWM`**으로 작동하여 연료를 분사하기 시작합니다. 이때부터 시스템은 8초(🔴**`Fuel Ramp Timeout`**) 안에 터빈 온도가 100°C(🔴**`Fuel Ramp Temp`**) 이상으로 오르는지 감시합니다. 만약 시간 내에 도달하지 못하면 시동 실패로 판단하고 `ERROR_STOP` 상태로 전환됩니다.
 4. **`IGNITION_CHECK` (점화 확인)**: 온도가 100°C(🔴**`Fuel Ramp Temp`**)를 넘으면, 성공적인 점화를 확인하는 단계로 넘어갑니다. 5초(🔴**`Ignition Timeout`**) 안에 온도가 300°C(🔴**`Ignition Temp`**) 이상으로 치솟아야 합니다.
