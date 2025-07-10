@@ -1,8 +1,8 @@
 /*
-  ROTOM Turbine Controller v1.4
-  - 최종 수정 버전
-  - 문제가 발생하던 VALVE_PIN을 안전한 GPIO 23으로 변경.
-  - IDLE 상태에서 수동 제어를 최우선으로 존중하도록 로직을 완전히 재설계하여 충돌 문제를 근본적으로 해결.
+  ROTOM Turbine Controller v1.5 (Analog Pump Control)
+  - PUMP_PWM_PIN (GPIO 25)의 제어 방식을 기존 Servo PWM (1000-2000us)에서
+    analogWrite (0-255) 방식으로 변경했습니다.
+  - 관련 변수, 함수, UI 로직을 모두 새로운 제어 방식에 맞게 수정했습니다.
 */
 
 #include <WiFi.h>
@@ -24,7 +24,7 @@
 #define PUMP_PWM_PIN 25
 #define STARTER_PWM_PIN 26
 #define GLOW_PIN 27
-#define VALVE_PIN 23 // <-- 문제가 없는 안전한 핀으로 변경
+#define VALVE_PIN 23
 #define MAX31855_CLK 18
 #define MAX31855_CS 5
 #define MAX31855_DO 19
@@ -52,7 +52,7 @@ struct EngineSettings {
   float coolingTemperature;
   int targetStarterPWM;
   int coolStarterPWM;
-  int targetStartPumpPWM;
+  int targetStartPumpPWM; // Changed from us to 0-255 scale
 };
 
 EngineSettings settings;
@@ -69,7 +69,7 @@ void loadSettings() {
   settings.coolingTemperature = preferences.getFloat("coolingTemp", 100.0);
   settings.targetStarterPWM = preferences.getInt("targetStarter", 1100);
   settings.coolStarterPWM = preferences.getInt("coolStarter", 1100);
-  settings.targetStartPumpPWM = preferences.getInt("targetPump", 1100);
+  settings.targetStartPumpPWM = preferences.getInt("targetPump", 50); // New default for 0-255 scale
   preferences.end();
   Serial.println("Engine settings loaded.");
 }
@@ -100,7 +100,7 @@ unsigned long stateStartTime = 0;
 
 // --- Control Variables ---
 int starterPWM = 1000;
-int pumpDuty = 1000;
+int pumpDuty = 0; // Changed from 1000 to 0 (0-255 scale)
 int powerPWM = 1000;
 int throttlePWM = 1000;
 bool powerSwitch = false;
@@ -150,7 +150,18 @@ void IRAM_ATTR isrPumpRPM() { portENTER_CRITICAL_ISR(&pumpRpmMux); unsigned long
 void IRAM_ATTR isrTurbineRPM() { portENTER_CRITICAL_ISR(&turbineRpmMux); unsigned long nowMicros = micros(); if (turbineLastPulseTimeMicros > 0) { turbinePulsePeriodMicros = nowMicros - turbineLastPulseTimeMicros; } turbineLastPulseTimeMicros = nowMicros; portEXIT_CRITICAL_ISR(&turbineRpmMux); }
 
 // --- Helper Functions ---
-void writePWM_US(int channel, int us) { us = constrain(us, 1000, 2000); int duty = map(us, 1000, 2000, 3277, 6553); ledcWrite(channel, duty); }
+// This function now handles both analog (pump) and PWM (starter) outputs
+void setActuatorOutputs(int pumpValue, int starterUs) {
+  // Pump: analogWrite, 0-255
+  pumpValue = constrain(pumpValue, 0, 255);
+  analogWrite(PUMP_PWM_PIN, pumpValue);
+  
+  // Starter: ledc PWM, 1000-2000us
+  starterUs = constrain(starterUs, 1000, 2000);
+  int starterDuty = map(starterUs, 1000, 2000, 3277, 6553);
+  ledcWrite(1, starterDuty); // Starter is on channel 1
+}
+
 
 void setState(EngineState newState) {
   if (engineState != newState) {
@@ -177,7 +188,7 @@ void notifyClients() {
   doc["glow"] = digitalRead(GLOW_PIN) ? "ON" : "OFF";
   doc["valve"] = digitalRead(VALVE_PIN) ? "ON" : "OFF";
   doc["starter"] = starterPWM;
-  doc["pump"] = pumpDuty;
+  doc["pump"] = pumpDuty; // This will now be 0-255
   doc["temp"] = isnan(temperature) ? "Error" : String(temperature, 1);
   doc["power"] = powerPWM;
   doc["throttle"] = throttlePWM;
@@ -195,7 +206,7 @@ void notifyClients() {
   settingsObj["coolingTemperature"] = settings.coolingTemperature;
   settingsObj["targetStarterPWM"] = settings.targetStarterPWM;
   settingsObj["coolStarterPWM"] = settings.coolStarterPWM;
-  settingsObj["targetStartPumpPWM"] = settings.targetStartPumpPWM;
+  settingsObj["targetStartPumpPWM"] = settings.targetStartPumpPWM; // Now 0-255
 
   String json;
   serializeJson(doc, json);
@@ -231,7 +242,8 @@ void handleWebSocket(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEv
           if (engineState == IDLE) { starterPWM = constrain(msg.substring(8).toInt(), 1000, 2000); }
       }
       else if (msg.startsWith("pump:")) { 
-          if (engineState == IDLE) { pumpDuty = constrain(msg.substring(5).toInt(), 1000, 2000); }
+          // Now expects a value from 0-255
+          if (engineState == IDLE) { pumpDuty = constrain(msg.substring(5).toInt(), 0, 255); }
       }
       else if (msg.startsWith("save_settings:")) {
         String settingsJson = msg.substring(14);
@@ -249,7 +261,7 @@ void handleWebSocket(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEv
             settings.coolingTemperature = doc["coolingTemperature"];
             settings.targetStarterPWM = doc["targetStarterPWM"];
             settings.coolStarterPWM = doc["coolStarterPWM"];
-            settings.targetStartPumpPWM = doc["targetStartPumpPWM"];
+            settings.targetStartPumpPWM = doc["targetStartPumpPWM"]; // Saves 0-255 value
             saveSettings();
         } else {
             Serial.print(F("deserializeJson() failed: "));
@@ -264,7 +276,14 @@ void handleWebSocket(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEv
 
 // --- WiFi & PWM Setup ---
 void setupWiFi() { WiFi.softAP(ssid, password); Serial.print("AP Started. SSID: "); Serial.print(ssid); Serial.print(" IP: "); Serial.println(WiFi.softAPIP()); if (MDNS.begin("afterburner")) { Serial.println("mDNS responder started: http://afterburner.local"); MDNS.addService("http", "tcp", 80); } else Serial.println("Error setting up MDNS responder!"); }
-void setupPWM() { ledcSetup(0, 50, 16); ledcAttachPin(PUMP_PWM_PIN, 0); ledcSetup(1, 50, 16); ledcAttachPin(STARTER_PWM_PIN, 1); }
+void setupPWM() {
+  // Setup for analogWrite on PUMP_PWM_PIN (no need for ledc)
+  pinMode(PUMP_PWM_PIN, OUTPUT);
+  
+  // Setup for ledc on STARTER_PWM_PIN (Channel 1)
+  ledcSetup(1, 50, 16);
+  ledcAttachPin(STARTER_PWM_PIN, 1);
+}
 
 // --- Finite State Machine (FSM) Logic ---
 bool rampingStarter = false;
@@ -282,8 +301,8 @@ void handleFSM() {
     case IDLE:
       digitalWrite(GLOW_PIN, manualGlowIntent);
       digitalWrite(VALVE_PIN, manualValveIntent);
-      writePWM_US(0, pumpDuty);
-      writePWM_US(1, starterPWM);
+      // Directly control pump (0-255) and starter (1000-2000us)
+      setActuatorOutputs(pumpDuty, starterPWM);
       
       if ((powerPWM > 1800 || powerSwitch) && !emergencyStop) {
         setState(ARMED);
@@ -293,8 +312,7 @@ void handleFSM() {
     case ARMED:
       digitalWrite(VALVE_PIN, HIGH);
       digitalWrite(GLOW_PIN, HIGH);
-      writePWM_US(0, 1000);
-      writePWM_US(1, 1000);
+      setActuatorOutputs(0, 1000); // pump off, starter off
       setState(GLOW_ON);
       break;
 
@@ -324,7 +342,7 @@ void handleFSM() {
           setState(FUEL_RAMP); 
         }
       }
-      writePWM_US(1, starterPWM);
+      setActuatorOutputs(0, starterPWM); // pump is still off
       if (powerPWM < 1300 && !powerSwitch) { setState(COOLING); }
       break;
 
@@ -333,8 +351,7 @@ void handleFSM() {
       digitalWrite(GLOW_PIN, HIGH);
       starterPWM = settings.targetStarterPWM;
       pumpDuty = settings.targetStartPumpPWM;
-      writePWM_US(0, pumpDuty);
-      writePWM_US(1, starterPWM);
+      setActuatorOutputs(pumpDuty, starterPWM);
       if (temperature > settings.fuelRampTemp) { setState(IGNITION_CHECK); }
       if (stateElapsedTime > settings.fuelRampTime) { setState(ERROR_STOP); }
       if (powerPWM < 1300 && !powerSwitch) { setState(COOLING); }
@@ -351,8 +368,7 @@ void handleFSM() {
       } else {
         digitalWrite(GLOW_PIN, HIGH);
       }
-      writePWM_US(0, pumpDuty);
-      writePWM_US(1, starterPWM);
+      setActuatorOutputs(pumpDuty, starterPWM);
       if (stateElapsedTime > settings.ignitionCheckTime) { setState(COOLING); }
       if (powerPWM < 1300 && !powerSwitch) { setState(COOLING); }
       break;
@@ -363,10 +379,10 @@ void handleFSM() {
       starterPWM = 1000;
       if (powerPWM <= 1300 && !powerSwitch) { setState(COOLING); }
       else {
-        pumpDuty = map(throttlePWM, 1000, 2000, 1100, 1900);
+        // Map throttle (1000-2000us) to pump duty (e.g., 30-255)
+        pumpDuty = map(throttlePWM, 1000, 2000, 30, 255);
       }
-      writePWM_US(0, pumpDuty);
-      writePWM_US(1, starterPWM);
+      setActuatorOutputs(pumpDuty, starterPWM);
       if (temperature > settings.overTemperature) { setState(ERROR_STOP); }
       break;
 
@@ -374,7 +390,7 @@ void handleFSM() {
     case ERROR_STOP:
       digitalWrite(VALVE_PIN, LOW);
       digitalWrite(GLOW_PIN, LOW);
-      pumpDuty = 1000;
+      pumpDuty = 0;
       
       if (engineState == COOLING && temperature > settings.coolingTemperature) {
         const unsigned long coolInterval = 5000; const unsigned long coolPulseDuration = 1000; 
@@ -389,8 +405,7 @@ void handleFSM() {
             setState(IDLE);
         }
       }
-      writePWM_US(0, pumpDuty);
-      writePWM_US(1, starterPWM);
+      setActuatorOutputs(pumpDuty, starterPWM);
 
       if (engineState == ERROR_STOP) {
         if (!errorAcknowledgedPowerLow && (powerPWM < 1300 && !powerSwitch)) {
@@ -409,7 +424,7 @@ void handleFSM() {
 // --- Arduino Setup Function ---
 void setup() {
   Serial.begin(115200);
-  Serial.println("\nROTOM Turbine Controller v1.4 (Final) Booting...");
+  Serial.println("\nROTOM Turbine Controller v1.5 (Analog Pump) Booting...");
   
   loadSettings();
   

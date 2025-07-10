@@ -55,7 +55,7 @@
           <div class="gauge-wrapper"><div class="gauge-title">Temperature</div><div id="gauge-temp" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-temp" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-temp" class="gauge-label" x="50" y="45">0.0</text><text class="gauge-units" x="50" y="55">°C</text></svg></div></div>
           <div class="gauge-wrapper"><div class="gauge-title">Turbine RPM</div><div id="gauge-turbineRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-turbineRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-turbineRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
           <div class="gauge-wrapper"><div class="gauge-title">Starter PWM</div><div id="gauge-starter" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-starter" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-starter" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Pump PWM</div><div id="gauge-pump" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pump" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pump" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
+          <div class="gauge-wrapper"><div class="gauge-title">Pump PWM</div><div id="gauge-pump" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pump" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pump" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">0-255</text></svg></div></div>
           <div class="gauge-wrapper"><div class="gauge-title">Power In</div><div id="gauge-power" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-power" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-power" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
           <div class="gauge-wrapper"><div class="gauge-title">Throttle In</div><div id="gauge-throttle" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-throttle" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-throttle" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
           <div class="gauge-wrapper"><div class="gauge-title">Pump RPM</div><div id="gauge-pumpRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pumpRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pumpRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
@@ -68,7 +68,7 @@
       <div class="row"> <button class="btn btn-valve-on" onclick="manualSet('valve', 1)">Solenoid Valve ON</button> <button class="btn btn-valve-off" onclick="manualSet('valve', 0)">Solenoid Valve OFF</button> </div>
       <div class="row"> <button class="btn btn-glow-on" onclick="manualSet('glow', 1)">Glow ON</button> <button class="btn btn-glow-off" onclick="manualSet('glow', 0)">Glow OFF</button> </div>
       <div class="row"> <button class="btn btn-starter" onclick="sendCommand('starter:1100')">Starter ON (1100us)</button> <button class="btn btn-starter" onclick="sendCommand('starter:1000')">Starter OFF</button> </div>
-      <label>Pump Duty (us): <span id="pumpValue">1000</span></label> <input type="range" min="1000" max="2000" step="10" value="1000" oninput="updatePump(this.value)">
+      <label>Pump Duty (0-255): <span id="pumpValue">0</span></label> <input type="range" min="0" max="255" step="1" value="0" oninput="updatePump(this.value)">
   </div>
   
   <div id="settings" class="tab-content">
@@ -82,7 +82,7 @@
           <label for="starterRampTime">3. Starter Ramp Time (ms)</label>
           <input type="number" id="starterRampTime">
           
-          <label for="targetStartPumpPWM">4. Start Pump PWM (µs)</label>
+          <label for="targetStartPumpPWM">4. Start Pump PWM (0-255)</label>
           <input type="number" id="targetStartPumpPWM">
 
           <label for="fuelRampTime">5. Fuel Ramp Timeout (ms)</label>
@@ -105,11 +105,6 @@
 
           <label for="coolingTemperature">11. Cooling Temp (°C)</label>
           <input type="number" id="coolingTemperature" step="0.1">
-          
-
-
-
-
 
       </div>
       <button class="btn btn-save" onclick="saveSettings()">Save Settings</button>
@@ -156,7 +151,8 @@
              document.getElementById('status-valve').innerText = data.valve;
           }
 
-          const gaugeDefs = { temp: { min: 0, max: 1000 }, turbineRPM: { min: 0, max: 180000 }, starter: { min: 1000, max: 2000 }, pump: { min: 1000, max: 2000 }, power: { min: 900, max: 2100 }, throttle: { min: 900, max: 2100 }, pumpRPM: { min: 0, max: 30000 } };
+          // Gauge definitions updated for the new pump range
+          const gaugeDefs = { temp: { min: 0, max: 1000 }, turbineRPM: { min: 0, max: 180000 }, starter: { min: 1000, max: 2000 }, pump: { min: 0, max: 255 }, power: { min: 900, max: 2100 }, throttle: { min: 900, max: 2100 }, pumpRPM: { min: 0, max: 30000 } };
           Object.keys(gaugeDefs).forEach(key => {
             if (data.hasOwnProperty(key)) {
               const def = gaugeDefs[key]; 
@@ -204,6 +200,7 @@
         coolingTemperature: parseFloat(document.getElementById('coolingTemperature').value),
         targetStarterPWM: parseInt(document.getElementById('targetStarterPWM').value),
         coolStarterPWM: parseInt(document.getElementById('coolStarterPWM').value),
+        // targetStartPumpPWM is now an integer from 0-255
         targetStartPumpPWM: parseInt(document.getElementById('targetStartPumpPWM').value)
       };
       
