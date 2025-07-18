@@ -1,226 +1,655 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="UTF-8">
-  <title>ROTOM Turbine Controller</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: sans-serif; padding: 1rem; background: #f7f7f7; margin: 0; }
-    h2 { text-align: center; }
-    .tabs { display: flex; gap: 10px; justify-content: center; margin-bottom: 1rem; }
-    .tab-btn { padding: 10px 20px; border: none; background: #ddd; cursor: pointer; border-radius: 6px; }
-    .tab-btn.active { background: #007bff; color: white; }
-    .tab-content { display: none; padding: 5px; }
-    .tab-content.active { display: block; }
-    .btn { display: block; width: 100%; padding: 10px; font-size: 1rem; margin: 10px 0; border: none; border-radius: 6px; color: white; cursor: pointer; }
-    .btn-glow-on, .btn-valve-on { background: #28a745; } 
-    .btn-glow-off, .btn-valve-off { background: #dc3545; }
-    .btn-starter { background: #007bff; } .btn-power { background: #17a2b8; } .btn-stop { background: #ff4136; }
-    .btn-save { background: #007bff; }
-    .row { display: flex; gap: 10px; margin: 10px 0; } .row .btn { flex: 1; margin: 0; }
-    label { display: block; margin: 10px 0 5px 0; }
-    input[type=range] { width: 100%; margin-bottom: 15px; }
-    .status-box { background: #fff; border: 1px solid #ccc; padding: 15px; margin-top: 1rem; border-radius: 8px; display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; gap: 15px; }
-    .status-item, .gauge-wrapper { text-align: center; padding: 0; box-sizing: border-box; width: calc(50% - 8px); max-width: 190px; min-width: 130px; flex-shrink: 1; flex-grow: 0; }
-    .status-item span { font-weight: bold; color: #007bff; display: block; font-size: 1.1em; margin-top: 4px; word-wrap: break-word; }
-    .gauge-title { font-size: 0.8em; color: #555; margin-bottom: 2px; white-space: nowrap; }
-    .gauge-container { width: 100%; display: block; }
-    .gauge-container > svg { display: block; width: 100%; height: auto; max-width: 100%; margin: 0 auto; overflow: visible; }
-    .gauge-background { fill: none; stroke: #eee; stroke-width: 12; }
-    .gauge-value { fill: none; stroke: #007bff; stroke-width: 12; stroke-linecap: round; }
-    #gauge-value-temp { stroke: #ff7f0e; } #gauge-value-turbineRPM { stroke: #dc3545; } #gauge-value-pumpRPM { stroke: #6f42c1; } #gauge-value-starter { stroke: #007bff; } #gauge-value-pump { stroke: #28a745; }
-    .gauge-label { fill: #333; font-family: sans-serif; font-size: 18px; font-weight: bold; text-anchor: middle; }
-    .gauge-units { fill: #555; font-family: sans-serif; font-size: 9px; text-anchor: middle; }
-    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 15px; align-items: center; margin-bottom: 1rem; padding: 10px; background: #fff; border-radius: 8px; border: 1px solid #ccc; }
-    .settings-grid label { text-align: right; }
-    .settings-grid input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-    @media (max-width: 480px) { .settings-grid { grid-template-columns: 1fr; } .settings-grid label { text-align: left; margin-bottom: -5px; } }
-    @media (max-width: 340px) { .status-item, .gauge-wrapper { width: 90%; } }
-  </style>
-</head>
-<body>
-  <h2>ROTOM Turbine Controller</h2>
+  <head>
+    <meta charset="UTF-8" />
+    <title>DSI ECU TOOL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 1rem;
+        background: #f7f7f7;
+        margin: 0;
+      }
+      h2 {
+        text-align: center;
+      }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 1rem;
+      }
+      .tab-btn {
+        padding: 10px 20px;
+        border: none;
+        background: #ddd;
+        cursor: pointer;
+        border-radius: 6px;
+      }
+      .tab-btn.active {
+        background: #007bff;
+        color: white;
+      }
+      .tab-content {
+        display: none;
+        padding: 5px;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        font-size: 1rem;
+        margin: 10px 0;
+        border: none;
+        border-radius: 6px;
+        color: white;
+        cursor: pointer;
+      }
+      .btn-glow-on,
+      .btn-valve-on {
+        background: #28a745;
+      }
+      .btn-glow-off,
+      .btn-valve-off {
+        background: #dc3545;
+      }
+      .btn-starter {
+        background: #007bff;
+      }
+      .btn-power {
+        background: #17a2b8;
+      }
+      .btn-stop {
+        background: #ff4136;
+      }
+      .btn-save {
+        background: #007bff;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        margin: 10px 0;
+      }
+      .row .btn {
+        flex: 1;
+        margin: 0;
+      }
+      label {
+        display: block;
+        margin: 10px 0 5px 0;
+      }
+      input[type="range"] {
+        width: 100%;
+        margin-bottom: 15px;
+      }
+      .status-box {
+        background: #fff;
+        border: 1px solid #ccc;
+        padding: 15px;
+        margin-top: 1rem;
+        border-radius: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: flex-start;
+        gap: 15px;
+      }
+      .status-item,
+      .gauge-wrapper {
+        text-align: center;
+        padding: 0;
+        box-sizing: border-box;
+        width: calc(50% - 8px);
+        max-width: 190px;
+        min-width: 130px;
+        flex-shrink: 1;
+        flex-grow: 0;
+      }
+      .status-item span {
+        font-weight: bold;
+        color: #007bff;
+        display: block;
+        font-size: 1.1em;
+        margin-top: 4px;
+        word-wrap: break-word;
+      }
+      .gauge-title {
+        font-size: 0.8em;
+        color: #555;
+        margin-bottom: 2px;
+        white-space: nowrap;
+      }
+      .gauge-container {
+        width: 100%;
+        display: block;
+      }
+      .gauge-container > svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+        margin: 0 auto;
+        overflow: visible;
+      }
+      .gauge-background {
+        fill: none;
+        stroke: #eee;
+        stroke-width: 12;
+      }
+      .gauge-value {
+        fill: none;
+        stroke: #007bff;
+        stroke-width: 12;
+        stroke-linecap: round;
+      }
+      #gauge-value-temp {
+        stroke: #ff7f0e;
+      }
+      #gauge-value-turbineRPM {
+        stroke: #dc3545;
+      }
+      #gauge-value-pumpRPM {
+        stroke: #6f42c1;
+      }
+      #gauge-value-starter {
+        stroke: #007bff;
+      }
+      #gauge-value-pump {
+        stroke: #28a745;
+      }
+      .gauge-label {
+        fill: #333;
+        font-family: sans-serif;
+        font-size: 18px;
+        font-weight: bold;
+        text-anchor: middle;
+      }
+      .gauge-units {
+        fill: #555;
+        font-family: sans-serif;
+        font-size: 9px;
+        text-anchor: middle;
+      }
+      .settings-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 15px;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding: 10px;
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+      }
+      .settings-grid label {
+        text-align: right;
+      }
+      .settings-grid input {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      @media (max-width: 480px) {
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+        .settings-grid label {
+          text-align: left;
+          margin-bottom: -5px;
+        }
+      }
+      @media (max-width: 340px) {
+        .status-item,
+        .gauge-wrapper {
+          width: 90%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h2>DSI ECU TOOL</h2>
 
-  <div class="tabs">
-    <button class="tab-btn active" onclick="showTab('monitor', this)">Monitor</button>
-    <button class="tab-btn" onclick="showTab('control', this)">Manual Control</button>
-    <button class="tab-btn" onclick="showTab('settings', this)">Settings</button>
-  </div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('monitor', this)">
+        Monitor
+      </button>
+      <button class="tab-btn" onclick="showTab('control', this)">
+        Manual Control
+      </button>
+      <button class="tab-btn" onclick="showTab('settings', this)">
+        Settings
+      </button>
+    </div>
 
-  <div id="monitor" class="tab-content active">
+    <div id="monitor" class="tab-content active">
       <div class="status-box">
-          <div class="status-item">State<span id="status-state">-</span></div>
-          <div class="status-item">Glow<span id="status-glow">-</span></div>
-          <div class="status-item">Valve<span id="status-valve">-</span></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Temperature</div><div id="gauge-temp" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-temp" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-temp" class="gauge-label" x="50" y="45">0.0</text><text class="gauge-units" x="50" y="55">°C</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Turbine RPM</div><div id="gauge-turbineRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-turbineRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-turbineRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Starter PWM</div><div id="gauge-starter" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-starter" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-starter" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Pump PWM</div><div id="gauge-pump" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pump" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pump" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">0-255</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Power In</div><div id="gauge-power" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-power" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-power" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Throttle In</div><div id="gauge-throttle" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-throttle" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-throttle" class="gauge-label" x="50" y="45">1000</text><text class="gauge-units" x="50" y="55">µs</text></svg></div></div>
-          <div class="gauge-wrapper"><div class="gauge-title">Pump RPM</div><div id="gauge-pumpRPM" class="gauge-container"><svg viewBox="-5 -2 110 60"><path class="gauge-background" d="M 5 50 A 45 45 0 0 1 95 50"></path><path id="gauge-value-pumpRPM" class="gauge-value" d="M 5 50 A 45 45 0 0 1 5 50"></path><text id="gauge-label-pumpRPM" class="gauge-label" x="50" y="45">0</text><text class="gauge-units" x="50" y="55">RPM</text></svg></div></div>
+        <div class="status-item">State<span id="status-state">-</span></div>
+        <div class="status-item">Glow<span id="status-glow">-</span></div>
+        <div class="status-item">Valve<span id="status-valve">-</span></div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Temperature</div>
+          <div id="gauge-temp" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-temp"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-temp" class="gauge-label" x="50" y="45">
+                0.0
+              </text>
+              <text class="gauge-units" x="50" y="55">°C</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Turbine RPM</div>
+          <div id="gauge-turbineRPM" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-turbineRPM"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text
+                id="gauge-label-turbineRPM"
+                class="gauge-label"
+                x="50"
+                y="45"
+              >
+                0
+              </text>
+              <text class="gauge-units" x="50" y="55">RPM</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Starter PWM</div>
+          <div id="gauge-starter" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-starter"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-starter" class="gauge-label" x="50" y="45">
+                1000
+              </text>
+              <text class="gauge-units" x="50" y="55">µs</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Pump PWM</div>
+          <div id="gauge-pump" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-pump"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-pump" class="gauge-label" x="50" y="45">
+                0
+              </text>
+              <text class="gauge-units" x="50" y="55">0-255</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Power In</div>
+          <div id="gauge-power" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-power"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-power" class="gauge-label" x="50" y="45">
+                1000
+              </text>
+              <text class="gauge-units" x="50" y="55">µs</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Throttle In</div>
+          <div id="gauge-throttle" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-throttle"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-throttle" class="gauge-label" x="50" y="45">
+                1000
+              </text>
+              <text class="gauge-units" x="50" y="55">µs</text>
+            </svg>
+          </div>
+        </div>
+        <div class="gauge-wrapper">
+          <div class="gauge-title">Pump RPM</div>
+          <div id="gauge-pumpRPM" class="gauge-container">
+            <svg viewBox="-5 -2 110 60">
+              <path
+                class="gauge-background"
+                d="M 5 50 A 45 45 0 0 1 95 50"
+              ></path>
+              <path
+                id="gauge-value-pumpRPM"
+                class="gauge-value"
+                d="M 5 50 A 45 45 0 0 1 5 50"
+              ></path>
+              <text id="gauge-label-pumpRPM" class="gauge-label" x="50" y="45">
+                0
+              </text>
+              <text class="gauge-units" x="50" y="55">RPM</text>
+            </svg>
+          </div>
+        </div>
       </div>
-  </div>
+    </div>
 
-  <div id="control" class="tab-content">
-      <div class="row"> <button class="btn btn-power" onclick="sendCommand('power:1')">System Power ON</button> <button class="btn btn-power" onclick="sendCommand('power:0')">System Power OFF</button> </div>
-      <hr>
-      <div class="row"> <button class="btn btn-valve-on" onclick="manualSet('valve', 1)">Solenoid Valve ON</button> <button class="btn btn-valve-off" onclick="manualSet('valve', 0)">Solenoid Valve OFF</button> </div>
-      <div class="row"> <button class="btn btn-glow-on" onclick="manualSet('glow', 1)">Glow ON</button> <button class="btn btn-glow-off" onclick="manualSet('glow', 0)">Glow OFF</button> </div>
-      <div class="row"> <button class="btn btn-starter" onclick="sendCommand('starter:1100')">Starter ON (1100us)</button> <button class="btn btn-starter" onclick="sendCommand('starter:1000')">Starter OFF</button> </div>
-      <label>Pump Duty (0-255): <span id="pumpValue">0</span></label> <input type="range" min="0" max="255" step="1" value="0" oninput="updatePump(this.value)">
-  </div>
-  
-  <div id="settings" class="tab-content">
+    <div id="control" class="tab-content">
+      <div class="row">
+        <button class="btn btn-power" onclick="sendCommand('power:1')">
+          System Power ON
+        </button>
+        <button class="btn btn-power" onclick="sendCommand('power:0')">
+          System Power OFF
+        </button>
+      </div>
+      <hr />
+      <div class="row">
+        <button class="btn btn-valve-on" onclick="manualSet('valve', 1)">
+          Solenoid Valve ON
+        </button>
+        <button class="btn btn-valve-off" onclick="manualSet('valve', 0)">
+          Solenoid Valve OFF
+        </button>
+      </div>
+      <div class="row">
+        <button class="btn btn-glow-on" onclick="manualSet('glow', 1)">
+          Glow ON
+        </button>
+        <button class="btn btn-glow-off" onclick="manualSet('glow', 0)">
+          Glow OFF
+        </button>
+      </div>
+      <div class="row">
+        <button class="btn btn-starter" onclick="sendCommand('starter:1300')">
+          Starter ON (1300us)
+        </button>
+        <button class="btn btn-starter" onclick="sendCommand('starter:1000')">
+          Starter OFF
+        </button>
+      </div>
+      <label>Pump Duty (0-255): <span id="pumpValue">0</span></label>
+      <input
+        type="range"
+        min="0"
+        max="255"
+        step="1"
+        value="0"
+        oninput="updatePump(this.value)"
+      />
+    </div>
+
+    <div id="settings" class="tab-content">
       <div class="settings-grid">
-          <label for="glowOnTime">1. Glow On Time (ms)</label>
-          <input type="number" id="glowOnTime">
-          
-          <label for="targetStarterPWM">2. Target Starter PWM (µs)</label>
-          <input type="number" id="targetStarterPWM">
+        <label for="glowOnTime">1. Glow On Time (ms)</label>
+        <input type="number" id="glowOnTime" />
 
-          <label for="starterRampTime">3. Starter Ramp Time (ms)</label>
-          <input type="number" id="starterRampTime">
-          
-          <label for="targetStartPumpPWM">4. Start Pump PWM (0-255)</label>
-          <input type="number" id="targetStartPumpPWM">
+        <label for="targetStarterPWM"
+          >2. Target Starter PWM (1000-2000µs)</label
+        >
+        <input type="number" id="targetStarterPWM" />
 
-          <label for="fuelRampTime">5. Fuel Ramp Timeout (ms)</label>
-          <input type="number" id="fuelRampTime">
-          
-          <label for="fuelRampTemp">6. Fuel Ramp Temp (°C)</label>
-          <input type="number" id="fuelRampTemp" step="0.1">
+        <label for="starterRampTime">3. Starter Ramp Time (ms)</label>
+        <input type="number" id="starterRampTime" />
 
-          <label for="ignitionCheckTime">7. Ignition Timeout (ms)</label>
-          <input type="number" id="ignitionCheckTime">
-          
-          <label for="ignitionCheckTemp">8. Ignition Temp (°C)</label>
-          <input type="number" id="ignitionCheckTemp" step="0.1">
+        <label for="targetStartPumpPWM">4. Start Pump Duty (0-255)</label>
+        <input type="number" id="targetStartPumpPWM" />
 
-          <label for="overTemperature">9. Over Temperature (°C)</label>
-          <input type="number" id="overTemperature" step="0.1">
-          
-          <label for="coolStarterPWM">10. Cooling Starter PWM (µs)</label>
-          <input type="number" id="coolStarterPWM">
+        <label for="fuelRampTime">5. Fuel Ramp Timeout (ms)</label>
+        <input type="number" id="fuelRampTime" />
 
-          <label for="coolingTemperature">11. Cooling Temp (°C)</label>
-          <input type="number" id="coolingTemperature" step="0.1">
+        <label for="fuelRampTemp">6. Fuel Ramp Temp (°C)</label>
+        <input type="number" id="fuelRampTemp" step="0.1" />
 
+        <label for="ignitionCheckTime">7. Ignition Timeout (ms)</label>
+        <input type="number" id="ignitionCheckTime" />
+
+        <label for="ignitionCheckTemp">8. Ignition Temp (°C)</label>
+        <input type="number" id="ignitionCheckTemp" step="0.1" />
+
+        <label for="overTemperature">9. Over Temperature (°C)</label>
+        <input type="number" id="overTemperature" step="0.1" />
+
+        <label for="coolStarterPWM"
+          >10. Cooling Starter PWM (1000-2000µs)</label
+        >
+        <input type="number" id="coolStarterPWM" />
+
+        <label for="coolingTemperature">11. Cooling Temp (°C)</label>
+        <input type="number" id="coolingTemperature" step="0.1" />
+
+        <label for="pumpDutyMin">12. IDLE Throttle Pump Duty (0-255)</label>
+        <input type="number" id="pumpDutyMin" min="0" max="255" />
+
+        <label for="pumpDutyMax">13. FULL Throttle Pump duty (0-255)</label>
+        <input type="number" id="pumpDutyMax" min="0" max="255" />
       </div>
-      <button class="btn btn-save" onclick="saveSettings()">Save Settings</button>
-  </div>
+      <button class="btn btn-save" onclick="saveSettings()">
+        Save Settings
+      </button>
+    </div>
 
-  <script>
-    let ws;
+    <script>
+      let ws;
 
-    function setGaugeValue(baseId, value, min, max) {
-      const valuePath = document.getElementById(`gauge-value-${baseId}`);
-      const label = document.getElementById(`gauge-label-${baseId}`);
-      if (!valuePath || !label) return;
-      value = parseFloat(value); if (isNaN(value)) value = min;
-      value = Math.max(min, Math.min(max, value));
-      const normalizedValue = (max - min === 0) ? 0 : (value - min) / (max - min);
-      const angle = normalizedValue * Math.PI;
-      const x = 50 - Math.cos(angle) * 45; const y = 50 - Math.sin(angle) * 45;
-      const largeArcFlag = 0; const sweepFlag = 1;
-      const d = `M 5 50 A 45 45 0 ${largeArcFlag} ${sweepFlag} ${x} ${y}`;
-      try {
-          valuePath.setAttribute('d', d);
-          label.textContent = (typeof baseId === 'string' && baseId.includes('temp')) ? value.toFixed(1) : Math.round(value);
-      } catch (e) { console.error(`Error updating gauge ${baseId}:`, e); }
-    }
-
-    function initWebSocket() {
-      ws = new WebSocket("ws://" + window.location.hostname + "/ws");
-      ws.onopen = function() { console.log("WebSocket Connected"); };
-      ws.onclose = function() { console.log("WebSocket Disconnected"); setTimeout(initWebSocket, 5000); };
-      ws.onerror = function(error) { console.error("WebSocket Error:", error); };
-      ws.onmessage = function(evt) {
+      function setGaugeValue(baseId, value, min, max) {
+        const valuePath = document.getElementById(`gauge-value-${baseId}`);
+        const label = document.getElementById(`gauge-label-${baseId}`);
+        if (!valuePath || !label) return;
+        value = parseFloat(value);
+        if (isNaN(value)) value = min;
+        value = Math.max(min, Math.min(max, value));
+        const normalizedValue =
+          max - min === 0 ? 0 : (value - min) / (max - min);
+        const angle = normalizedValue * Math.PI;
+        const x = 50 - Math.cos(angle) * 45;
+        const y = 50 - Math.sin(angle) * 45;
+        const largeArcFlag = 0;
+        const sweepFlag = 1;
+        const d = `M 5 50 A 45 45 0 ${largeArcFlag} ${sweepFlag} ${x} ${y}`;
         try {
-          const data = JSON.parse(evt.data);
-          const stateNames = ["IDLE", "ARMED", "GLOW_ON", "STARTER_ON", "FUEL_RAMP", "IGNITION_CHECK", "RUNNING", "COOLING", "ERROR_STOP"];
-          
-          if (data.hasOwnProperty('state')) {
-            const stateText = (data.state >= 0 && data.state < stateNames.length) ? stateNames[data.state] : "Unknown(" + data.state + ")";
-            document.getElementById('status-state').innerText = stateText;
-          }
-          if (data.hasOwnProperty('glow')) {
-             document.getElementById('status-glow').innerText = data.glow;
-          }
-          if (data.hasOwnProperty('valve')) {
-             document.getElementById('status-valve').innerText = data.valve;
-          }
+          valuePath.setAttribute("d", d);
+          label.textContent =
+            typeof baseId === "string" && baseId.includes("temp")
+              ? value.toFixed(1)
+              : Math.round(value);
+        } catch (e) {
+          console.error(`Error updating gauge ${baseId}:`, e);
+        }
+      }
 
-          // Gauge definitions updated for the new pump range
-          const gaugeDefs = { temp: { min: 0, max: 1000 }, turbineRPM: { min: 0, max: 180000 }, starter: { min: 1000, max: 2000 }, pump: { min: 0, max: 255 }, power: { min: 900, max: 2100 }, throttle: { min: 900, max: 2100 }, pumpRPM: { min: 0, max: 30000 } };
-          Object.keys(gaugeDefs).forEach(key => {
-            if (data.hasOwnProperty(key)) {
-              const def = gaugeDefs[key]; 
-              setGaugeValue(key, data[key], def.min, def.max);
+      function initWebSocket() {
+        ws = new WebSocket("ws://" + window.location.hostname + "/ws");
+        ws.onopen = function () {
+          console.log("WebSocket Connected");
+        };
+        ws.onclose = function () {
+          console.log("WebSocket Disconnected");
+          setTimeout(initWebSocket, 5000);
+        };
+        ws.onerror = function (error) {
+          console.error("WebSocket Error:", error);
+        };
+        ws.onmessage = function (evt) {
+          try {
+            const data = JSON.parse(evt.data);
+            const stateNames = [
+              "IDLE",
+              "ARMED",
+              "GLOW_ON",
+              "STARTER_ON",
+              "FUEL_RAMP",
+              "IGNITION_CHECK",
+              "RUNNING",
+              "COOLING",
+              "ERROR_STOP",
+            ];
+
+            if (data.hasOwnProperty("state")) {
+              const stateText =
+                data.state >= 0 && data.state < stateNames.length
+                  ? stateNames[data.state]
+                  : "Unknown(" + data.state + ")";
+              document.getElementById("status-state").innerText = stateText;
             }
-          });
-          
-          if (data.hasOwnProperty('settings') && !document.getElementById('settings').classList.contains('active')) {
-            const settings = data.settings;
-            for (const key in settings) {
-              const inputElement = document.getElementById(key);
-              if (inputElement) {
-                inputElement.value = settings[key];
+            if (data.hasOwnProperty("glow")) {
+              document.getElementById("status-glow").innerText = data.glow;
+            }
+            if (data.hasOwnProperty("valve")) {
+              document.getElementById("status-valve").innerText = data.valve;
+            }
+
+            // Gauge definitions updated for the new pump range
+            const gaugeDefs = {
+              temp: { min: 0, max: 1000 },
+              turbineRPM: { min: 0, max: 180000 },
+              starter: { min: 1000, max: 2000 },
+              pump: { min: 0, max: 255 },
+              power: { min: 900, max: 2100 },
+              throttle: { min: 900, max: 2100 },
+              pumpRPM: { min: 0, max: 30000 },
+            };
+            Object.keys(gaugeDefs).forEach((key) => {
+              if (data.hasOwnProperty(key)) {
+                const def = gaugeDefs[key];
+                setGaugeValue(key, data[key], def.min, def.max);
+              }
+            });
+
+            if (
+              data.hasOwnProperty("settings") &&
+              !document.getElementById("settings").classList.contains("active")
+            ) {
+              const settings = data.settings;
+              for (const key in settings) {
+                const inputElement = document.getElementById(key);
+                if (inputElement) {
+                  inputElement.value = settings[key];
+                }
               }
             }
+          } catch (e) {
+            console.error("Failed to parse WebSocket message:", e, evt.data);
           }
-          
-        } catch (e) { console.error("Failed to parse WebSocket message:", e, evt.data); }
-      };
-    }
+        };
+      }
 
-    function sendCommand(cmd) {
-      if (ws && ws.readyState === WebSocket.OPEN) { ws.send(cmd); }
-      else { console.error("WebSocket not connected."); }
-    }
-    
-    function manualSet(device, state) {
-        sendCommand(device + ':' + state);
-    }
+      function sendCommand(cmd) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(cmd);
+        } else {
+          console.error("WebSocket not connected.");
+        }
+      }
 
-    function updatePump(val) {
-      document.getElementById("pumpValue").innerText = val;
-      sendCommand("pump:" + val);
-    }
-    
-    function saveSettings() {
-      const settings = {
-        glowOnTime: parseInt(document.getElementById('glowOnTime').value),
-        starterRampTime: parseInt(document.getElementById('starterRampTime').value),
-        fuelRampTime: parseInt(document.getElementById('fuelRampTime').value),
-        fuelRampTemp: parseFloat(document.getElementById('fuelRampTemp').value),
-        ignitionCheckTime: parseInt(document.getElementById('ignitionCheckTime').value),
-        ignitionCheckTemp: parseFloat(document.getElementById('ignitionCheckTemp').value),
-        overTemperature: parseFloat(document.getElementById('overTemperature').value),
-        coolingTemperature: parseFloat(document.getElementById('coolingTemperature').value),
-        targetStarterPWM: parseInt(document.getElementById('targetStarterPWM').value),
-        coolStarterPWM: parseInt(document.getElementById('coolStarterPWM').value),
-        // targetStartPumpPWM is now an integer from 0-255
-        targetStartPumpPWM: parseInt(document.getElementById('targetStartPumpPWM').value)
-      };
-      
-      const jsonString = JSON.stringify(settings);
-      sendCommand("save_settings:" + jsonString);
-      alert("Settings saved!");
-    }
+      function manualSet(device, state) {
+        sendCommand(device + ":" + state);
+      }
 
-    function showTab(tabId, clickedButtonElement) {
-      document.querySelectorAll(".tab-content").forEach(div => {
-        div.classList.remove("active");
-      });
-      document.querySelectorAll(".tab-btn").forEach(btn => {
-        btn.classList.remove("active");
-      });
-      document.getElementById(tabId).classList.add("active");
-      clickedButtonElement.classList.add("active");
-    }
+      function updatePump(val) {
+        document.getElementById("pumpValue").innerText = val;
+        sendCommand("pump:" + val);
+      }
 
-    window.onload = initWebSocket;
-  </script>
-</body>
+      function saveSettings() {
+        const settings = {
+          glowOnTime: parseInt(document.getElementById("glowOnTime").value),
+          starterRampTime: parseInt(
+            document.getElementById("starterRampTime").value
+          ),
+          fuelRampTime: parseInt(document.getElementById("fuelRampTime").value),
+          fuelRampTemp: parseFloat(
+            document.getElementById("fuelRampTemp").value
+          ),
+          ignitionCheckTime: parseInt(
+            document.getElementById("ignitionCheckTime").value
+          ),
+          ignitionCheckTemp: parseFloat(
+            document.getElementById("ignitionCheckTemp").value
+          ),
+          overTemperature: parseFloat(
+            document.getElementById("overTemperature").value
+          ),
+          coolingTemperature: parseFloat(
+            document.getElementById("coolingTemperature").value
+          ),
+          targetStarterPWM: parseInt(
+            document.getElementById("targetStarterPWM").value
+          ),
+          coolStarterPWM: parseInt(
+            document.getElementById("coolStarterPWM").value
+          ),
+          // targetStartPumpPWM is now an integer from 0-255
+          targetStartPumpPWM: parseInt(
+            document.getElementById("targetStartPumpPWM").value
+          ),
+          pumpDutyMin: parseInt(document.getElementById("pumpDutyMin").value),
+          pumpDutyMax: parseInt(document.getElementById("pumpDutyMax").value), // 추가: pumpDutyMax 포함
+        };
+
+        const jsonString = JSON.stringify(settings);
+        sendCommand("save_settings:" + jsonString);
+        alert("Settings saved!");
+      }
+
+      function showTab(tabId, clickedButtonElement) {
+        document.querySelectorAll(".tab-content").forEach((div) => {
+          div.classList.remove("active");
+        });
+        document.querySelectorAll(".tab-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        document.getElementById(tabId).classList.add("active");
+        clickedButtonElement.classList.add("active");
+      }
+
+      window.onload = initWebSocket;
+    </script>
+  </body>
 </html>
