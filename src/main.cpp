@@ -1,22 +1,17 @@
-/*
-  ROTOM Turbine Controller v1.5 (Analog Pump Control)
-  - PUMP_PWM_PIN (GPIO 25)의 제어 방식을 기존 Servo PWM (1000-2000us)에서
-    analogWrite (0-255) 방식으로 변경했습니다.
-  - 관련 변수, 함수, UI 로직을 모두 새로운 제어 방식에 맞게 수정했습니다.
-*/
+#include <WiFi.h>              // ESP32 WiFi library
+#include <ESPAsyncWebServer.h> // Asynchronous web server for ESP32
+#include <AsyncTCP.h>          // Async TCP for WebSocket
+#include <SPI.h>               // SPI for thermocouple
+#include <SPIFFS.h>            // SPI Flash File System for serving web files
+#include <Adafruit_MAX31855.h> // Thermocouple sensor library
+#include <ESPmDNS.h>           // mDNS for local network name resolution
+#include <ArduinoJson.h>       // JSON parsing library
+#include <Preferences.h>       // Non-volatile storage (NVS) for settings
+#include <functional>          // For std::function if needed
 
-#include <WiFi.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncTCP.h>
-#include <SPI.h>
-#include <SPIFFS.h>
-#include <Adafruit_MAX31855.h>
-#include <ESPmDNS.h>
-#include <ArduinoJson.h>
-#include <Preferences.h>
-#include <functional>
+#include <functional> // For std::function if needed
 
-// --- Pin assignments ---
+// --- 핀 할당: 하드웨어 연결에 사용되는 ESP32 핀 번호 정의 ---
 #define POWER_PWM_PIN 32
 #define THROTTLE_PWM_PIN 33
 #define PUMP_RPM_PIN 34
@@ -29,18 +24,18 @@
 #define MAX31855_CS 5
 #define MAX31855_DO 19
 
-// --- WiFi Configuration ---
+// --- WiFi 설정: AP 모드 SSID 및 비밀번호 ---
 const char *ssid = "afterburner";
 const char *password = "12345678";
 
-// --- Web Server & WebSocket ---
+// --- 웹 서버 및 WebSocket 객체 생성 ---
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
-// --- NVS (Non-Volatile Storage) for Settings ---
+// --- NVS: 엔진 설정을 영구 저장하기 위한 Preferences 객체 ---
 Preferences preferences;
 
-// --- Engine Settings Structure ---
+// --- 엔진 설정 구조체: UI 및 펌웨어에서 사용하는 모든 설정값을 저장 ---
 struct EngineSettings
 {
   unsigned long glowOnTime;
@@ -58,8 +53,9 @@ struct EngineSettings
   int pumpDutyMax;        // 추가: 펌프 최대 듀티값
 };
 
-EngineSettings settings;
+EngineSettings settings; // 전역 엔진 설정 인스턴스
 
+// NVS에서 엔진 설정값을 불러오는 함수
 void loadSettings()
 {
   preferences.begin("engine-settings", false);
@@ -80,6 +76,7 @@ void loadSettings()
   Serial.println("Engine settings loaded.");
 }
 
+// NVS에 엔진 설정값을 저장하는 함수
 void saveSettings()
 {
   preferences.begin("engine-settings", false);
@@ -101,6 +98,7 @@ void saveSettings()
 }
 
 // --- Engine State Machine ---
+// 엔진 상태를 나타내는 열거형: FSM에서 사용
 enum EngineState
 {
   IDLE,
@@ -113,65 +111,67 @@ enum EngineState
   COOLING,
   ERROR_STOP
 };
-EngineState engineState = IDLE;
+EngineState engineState = IDLE;   // 현재 엔진 상태
+unsigned long stateStartTime = 0; // 상태 진입 시각(ms)
 unsigned long stateStartTime = 0;
 
-// --- Control Variables ---
-int starterPWM = 1000;
-int pumpDuty = 0; // Changed from 1000 to 0 (0-255 scale)
-int powerPWM = 1000;
-int throttlePWM = 1000;
-bool powerSwitch = false;
-bool emergencyStop = false;
-bool manualValveIntent = false;
-bool manualGlowIntent = false;
+// --- 제어 변수: PWM, 스위치, 수동 제어 플래그 등 ---
+int starterPWM = 1000;          // 스타터 PWM (us)
+int pumpDuty = 0;               // 펌프 듀티 (0-255)
+int powerPWM = 1000;            // 파워 PWM (us)
+int throttlePWM = 1000;         // 스로틀 PWM (us)
+bool powerSwitch = false;       // UI에서 파워 스위치 상태
+bool emergencyStop = false;     // 긴급 정지 플래그
+bool manualValveIntent = false; // 수동 밸브 제어 의도
+bool manualGlowIntent = false;  // 수동 글로우 제어 의도
 
-// --- Flag for Error Reset Logic ---
-bool errorAcknowledgedPowerLow = false;
-bool errorResetPowerHighSeen = false;
+// --- 에러 리셋 로직을 위한 플래그 ---
+bool errorAcknowledgedPowerLow = false; // 에러 상태에서 파워 Low 인지 확인
+bool errorResetPowerHighSeen = false;   // 에러 리셋 조건 충족 여부
 
-// --- Sensor & Timing Variables ---
-float temperature = 0.0;
-Adafruit_MAX31855 thermocouple(MAX31855_CLK, MAX31855_CS, MAX31855_DO);
-unsigned long lastTempReadTime = 0;
-const unsigned long TEMP_READ_INTERVAL = 250;
-unsigned long lastWsUpdateTime = 0;
-const unsigned long WS_UPDATE_INTERVAL = 250;
-unsigned long lastFsmUpdateTime = 0;
-const unsigned long FSM_UPDATE_INTERVAL = 50;
+// --- 센서 및 타이밍 변수 ---
+float temperature = 0.0;                                                // 현재 온도 (℃)
+Adafruit_MAX31855 thermocouple(MAX31855_CLK, MAX31855_CS, MAX31855_DO); // MAX31855 온도 센서 객체
+unsigned long lastTempReadTime = 0;                                     // 마지막 온도 측정 시각
+const unsigned long TEMP_READ_INTERVAL = 250;                           // 온도 측정 주기(ms)
+unsigned long lastWsUpdateTime = 0;                                     // 마지막 WebSocket 업데이트 시각
+const unsigned long WS_UPDATE_INTERVAL = 250;                           // WebSocket 업데이트 주기(ms)
+unsigned long lastFsmUpdateTime = 0;                                    // 마지막 FSM 업데이트 시각
+const unsigned long FSM_UPDATE_INTERVAL = 50;                           // FSM 업데이트 주기(ms)
 
-// --- PWM Input (Interrupt based) ---
-volatile unsigned long powerPulseStart = 0;
-volatile int latestPowerPWM = 1000;
-portMUX_TYPE powerMux = portMUX_INITIALIZER_UNLOCKED;
-volatile unsigned long throttlePulseStart = 0;
-volatile int latestThrottlePWM = 1000;
-portMUX_TYPE throttleMux = portMUX_INITIALIZER_UNLOCKED;
+// --- PWM 입력 (인터럽트 기반): 파워/스로틀 신호 측정 ---
+volatile unsigned long powerPulseStart = 0;              // 파워 PWM 펄스 시작 시각
+volatile int latestPowerPWM = 1000;                      // 최신 파워 PWM 값
+portMUX_TYPE powerMux = portMUX_INITIALIZER_UNLOCKED;    // 파워 PWM 뮤텍스
+volatile unsigned long throttlePulseStart = 0;           // 스로틀 PWM 펄스 시작 시각
+volatile int latestThrottlePWM = 1000;                   // 최신 스로틀 PWM 값
+portMUX_TYPE throttleMux = portMUX_INITIALIZER_UNLOCKED; // 스로틀 PWM 뮤텍스
 
-// --- RPM Measurement Variables ---
-portMUX_TYPE pumpRpmMux = portMUX_INITIALIZER_UNLOCKED;
-volatile unsigned long pumpLastPulseTimeMicros = 0;
-volatile unsigned long pumpPulsePeriodMicros = 0;
-float pumpRPM = 0.0;
-const unsigned long RPM_TIMEOUT_MS = 1000;
-portMUX_TYPE turbineRpmMux = portMUX_INITIALIZER_UNLOCKED;
-volatile unsigned long turbineLastPulseTimeMicros = 0;
-volatile unsigned long turbinePulsePeriodMicros = 0;
-float turbineRPM = 0.0;
-unsigned long lastRpmCalcTime = 0;
-const unsigned long RPM_CALC_INTERVAL = 100;
+// --- RPM 측정 변수: 펌프/터빈 RPM 계산 ---
+portMUX_TYPE pumpRpmMux = portMUX_INITIALIZER_UNLOCKED;    // 펌프 RPM 뮤텍스
+volatile unsigned long pumpLastPulseTimeMicros = 0;        // 펌프 마지막 펄스 시각(μs)
+volatile unsigned long pumpPulsePeriodMicros = 0;          // 펌프 펄스 주기(μs)
+float pumpRPM = 0.0;                                       // 펌프 RPM 값
+const unsigned long RPM_TIMEOUT_MS = 1000;                 // RPM 타임아웃(ms)
+portMUX_TYPE turbineRpmMux = portMUX_INITIALIZER_UNLOCKED; // 터빈 RPM 뮤텍스
+volatile unsigned long turbineLastPulseTimeMicros = 0;     // 터빈 마지막 펄스 시각(μs)
+volatile unsigned long turbinePulsePeriodMicros = 0;       // 터빈 펄스 주기(μs)
+float turbineRPM = 0.0;                                    // 터빈 RPM 값
+unsigned long lastRpmCalcTime = 0;                         // 마지막 RPM 계산 시각
+const unsigned long RPM_CALC_INTERVAL = 100;               // RPM 계산 주기(ms)
 
-// --- Magic Numbers as Constants ---
-const int PWM_MIN = 1000;
-const int PWM_MAX = 2000;
-const int PUMP_MIN = 0;
-const int PUMP_MAX = 255;
-const int POWER_ARMED = 1800;
-const int POWER_DISARM = 1300;
-const unsigned long COOL_INTERVAL = 5000;
-const unsigned long COOL_PULSE_DURATION = 1000;
+// --- 매직 넘버: PWM, 펌프, 파워 임계값 등 ---
+const int PWM_MIN = 1000;                       // PWM 최소값(us)
+const int PWM_MAX = 2000;                       // PWM 최대값(us)
+const int PUMP_MIN = 0;                         // 펌프 듀티 최소값
+const int PUMP_MAX = 255;                       // 펌프 듀티 최대값
+const int POWER_ARMED = 1800;                   // 파워 Armed 임계값
+const int POWER_DISARM = 1300;                  // 파워 Disarm 임계값
+const unsigned long COOL_INTERVAL = 5000;       // 냉각 펄스 간격(ms)
+const unsigned long COOL_PULSE_DURATION = 1000; // 냉각 펄스 지속시간(ms)
 
-// --- PWM Input ISRs ---
+// --- PWM 입력 인터럽트 서비스 루틴: 파워/스로틀 신호 측정 ---
+// 파워 PWM 신호 측정 ISR
 void IRAM_ATTR isrPowerPWM()
 {
   portENTER_CRITICAL_ISR(&powerMux);
@@ -191,6 +191,7 @@ void IRAM_ATTR isrPowerPWM()
   }
   portEXIT_CRITICAL_ISR(&powerMux);
 }
+// 스로틀 PWM 신호 측정 ISR
 void IRAM_ATTR isrThrottlePWM()
 {
   portENTER_CRITICAL_ISR(&throttleMux);
@@ -210,6 +211,7 @@ void IRAM_ATTR isrThrottlePWM()
   }
   portEXIT_CRITICAL_ISR(&throttleMux);
 }
+// 펌프 RPM 측정 ISR: 펄스 간 시간 기록
 void IRAM_ATTR isrPumpRPM()
 {
   portENTER_CRITICAL_ISR(&pumpRpmMux);
@@ -221,6 +223,7 @@ void IRAM_ATTR isrPumpRPM()
   pumpLastPulseTimeMicros = nowMicros;
   portEXIT_CRITICAL_ISR(&pumpRpmMux);
 }
+// 터빈 RPM 측정 ISR: 펄스 간 시간 기록
 void IRAM_ATTR isrTurbineRPM()
 {
   portENTER_CRITICAL_ISR(&turbineRpmMux);
@@ -233,8 +236,10 @@ void IRAM_ATTR isrTurbineRPM()
   portEXIT_CRITICAL_ISR(&turbineRpmMux);
 }
 
-// --- Helper Functions ---
+// --- 보조 함수 ---
 // This function now handles both analog (pump) and PWM (starter) outputs
+// 펌프 및 스타터 출력 제어 함수
+// pumpValue: 0-255, starterUs: 1000-2000us
 void setActuatorOutputs(int pumpValue, int starterUs)
 {
   // Pump: analogWrite, 0-255
@@ -246,6 +251,7 @@ void setActuatorOutputs(int pumpValue, int starterUs)
   ledcWrite(1, starterDuty); // Starter is on channel 1
 }
 
+// 엔진 상태 전환 함수: 상태 변경 시 초기화 및 로그 출력
 void setState(EngineState newState)
 {
   if (engineState != newState)
@@ -269,6 +275,7 @@ void setState(EngineState newState)
   }
 }
 
+// UI에 현재 상태 및 설정값을 WebSocket으로 전송하는 함수
 void notifyClients()
 {
   JsonDocument doc;
@@ -304,6 +311,7 @@ void notifyClients()
 }
 
 // --- WebSocket Handler ---
+// WebSocket 이벤트 핸들러: UI와의 통신 처리
 void handleWebSocket(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
 {
   if (type == WS_EVT_CONNECT)
@@ -407,6 +415,7 @@ void handleWebSocket(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEv
 }
 
 // --- WiFi & PWM Setup ---
+// WiFi 및 mDNS 설정 함수
 void setupWiFi()
 {
   WiFi.softAP(ssid, password);
@@ -422,6 +431,7 @@ void setupWiFi()
   else
     Serial.println("Error setting up MDNS responder!");
 }
+// PWM 및 아날로그 출력 핀 초기화 함수
 void setupPWM()
 {
   // Setup for analogWrite on PUMP_PWM_PIN (no need for ledc)
@@ -432,12 +442,13 @@ void setupPWM()
   ledcAttachPin(STARTER_PWM_PIN, 1);
 }
 
-// --- Finite State Machine (FSM) Logic ---
-bool rampingStarter = false;
-unsigned long starterRampStartTime = 0;
-unsigned long lastCoolPulseTime = 0;
-bool coolPulseActive = false;
+// --- 엔진 FSM 로직: 각 상태별 동작 처리 ---
+bool rampingStarter = false;            // 스타터 램프 진행 중 여부
+unsigned long starterRampStartTime = 0; // 스타터 램프 시작 시각
+unsigned long lastCoolPulseTime = 0;    // 마지막 냉각 펄스 시각
+bool coolPulseActive = false;           // 냉각 펄스 활성화 여부
 
+// 엔진 FSM 상태 처리 함수: 각 상태별 제어 로직 구현
 void handleFSM()
 {
   unsigned long now = millis();
@@ -626,6 +637,7 @@ void handleFSM()
 }
 
 // --- Arduino Setup Function ---
+// Arduino 기본 setup 함수: 하드웨어 초기화 및 서버/인터럽트 설정
 void setup()
 {
   Serial.begin(115200);
@@ -676,6 +688,7 @@ void setup()
 }
 
 // --- Arduino Loop Function ---
+// Arduino 기본 loop 함수: 센서 측정, FSM/WS 업데이트, 클라이언트 통신
 void loop()
 {
   unsigned long currentTime = millis();
