@@ -232,6 +232,9 @@
         <div class="status-item">State<span id="status-state">-</span></div>
         <div class="status-item">Glow<span id="status-glow">-</span></div>
         <div class="status-item">Valve<span id="status-valve">-</span></div>
+        <div class="status-item">
+          Battery Voltage<span id="status-batteryVoltage">-</span>
+        </div>
         <div class="gauge-wrapper">
           <div class="gauge-title">Temperature</div>
           <div id="gauge-temp" class="gauge-container">
@@ -543,6 +546,10 @@
             }
             if (data.hasOwnProperty("valve")) {
               document.getElementById("status-valve").innerText = data.valve;
+            }
+            if (data.hasOwnProperty("batteryVoltage")) {
+              document.getElementById("status-batteryVoltage").innerText =
+                data.batteryVoltage + " V";
             }
 
             // Gauge definitions updated for the new pump range

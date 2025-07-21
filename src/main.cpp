@@ -15,7 +15,9 @@
 #define POWER_PWM_PIN 32
 #define THROTTLE_PWM_PIN 33
 #define PUMP_RPM_PIN 34
+
 #define TURBINE_RPM_PIN 35
+#define BATTERY_VOLT_PIN 36 // 3셀 배터리 전압 측정용 아날로그 핀
 #define PUMP_PWM_PIN 25
 #define STARTER_PWM_PIN 26
 #define GLOW_PIN 27
@@ -134,10 +136,19 @@ float temperature = 0.0;                                                // 현�
 Adafruit_MAX31855 thermocouple(MAX31855_CLK, MAX31855_CS, MAX31855_DO); // MAX31855 온도 센서 객체
 unsigned long lastTempReadTime = 0;                                     // 마지막 온도 측정 시각
 const unsigned long TEMP_READ_INTERVAL = 250;                           // 온도 측정 주기(ms)
-unsigned long lastWsUpdateTime = 0;                                     // 마지막 WebSocket 업데이트 시각
-const unsigned long WS_UPDATE_INTERVAL = 250;                           // WebSocket 업데이트 주기(ms)
-unsigned long lastFsmUpdateTime = 0;                                    // 마지막 FSM 업데이트 시각
-const unsigned long FSM_UPDATE_INTERVAL = 50;                           // FSM 업데이트 주기(ms)
+
+float batteryVoltage = 0.0;                     // 3셀 배터리 전압 (V)
+const float VOLTAGE_DIVIDER_RATIO = 15.0 / 3.3; // 15V -> 3.3V 분배기 비율
+const int ADC_MAX = 4095;                       // ESP32 12비트 ADC 최대값
+const float ADC_REF = 3.3;                      // ESP32 ADC 기준 전압(V)
+
+unsigned long lastBatteryReadTime = 0;           // 마지막 배터리 전압 측정 시각
+const unsigned long BATTERY_READ_INTERVAL = 500; // 배터리 전압 측정 주기(ms)
+
+unsigned long lastWsUpdateTime = 0;           // 마지막 WebSocket 업데이트 시각
+const unsigned long WS_UPDATE_INTERVAL = 250; // WebSocket 업데이트 주기(ms)
+unsigned long lastFsmUpdateTime = 0;          // 마지막 FSM 업데이트 시각
+const unsigned long FSM_UPDATE_INTERVAL = 50; // FSM 업데이트 주기(ms)
 
 // --- PWM 입력 (인터럽트 기반): 파워/스로틀 신호 측정 ---
 volatile unsigned long powerPulseStart = 0;              // 파워 PWM 펄스 시작 시각
@@ -276,6 +287,8 @@ void setState(EngineState newState)
 }
 
 // UI에 현재 상태 및 설정값을 WebSocket으로 전송하는 함수
+// UI에 현재 상태 및 설정값을 WebSocket으로 전송하는 함수
+// batteryVoltage도 함께 전송
 void notifyClients()
 {
   JsonDocument doc;
@@ -287,8 +300,10 @@ void notifyClients()
   doc["temp"] = isnan(temperature) ? "Error" : String(temperature, 1);
   doc["power"] = powerPWM;
   doc["throttle"] = throttlePWM;
+
   doc["pumpRPM"] = String(pumpRPM, 0);
   doc["turbineRPM"] = String(turbineRPM, 0);
+  doc["batteryVoltage"] = String(batteryVoltage, 2); // 배터리 전압(V) 소수점 2자리
 
   JsonObject settingsObj = doc["settings"].to<JsonObject>();
   settingsObj["glowOnTime"] = settings.glowOnTime;
@@ -638,6 +653,8 @@ void handleFSM()
 
 // --- Arduino Setup Function ---
 // Arduino 기본 setup 함수: 하드웨어 초기화 및 서버/인터럽트 설정
+// Arduino 기본 setup 함수: 하드웨어 초기화 및 서버/인터럽트 설정
+// BATTERY_VOLT_PIN 아날로그 입력으로 설정
 void setup()
 {
   Serial.begin(115200);
@@ -653,6 +670,7 @@ void setup()
   pinMode(THROTTLE_PWM_PIN, INPUT_PULLUP);
   pinMode(PUMP_RPM_PIN, INPUT);
   pinMode(TURBINE_RPM_PIN, INPUT);
+  pinMode(BATTERY_VOLT_PIN, INPUT); // 배터리 전압 측정 핀 아날로그 입력
 
   if (!SPIFFS.begin(true))
   {
@@ -689,6 +707,8 @@ void setup()
 
 // --- Arduino Loop Function ---
 // Arduino 기본 loop 함수: 센서 측정, FSM/WS 업데이트, 클라이언트 통신
+// Arduino 기본 loop 함수: 센서 측정, FSM/WS 업데이트, 클라이언트 통신
+// 배터리 전압 측정 및 UI 전송 추가
 void loop()
 {
   unsigned long currentTime = millis();
@@ -701,12 +721,22 @@ void loop()
   throttlePWM = latestThrottlePWM;
   portEXIT_CRITICAL(&throttleMux);
 
+  // 온도 측정
   if (currentTime - lastTempReadTime >= TEMP_READ_INTERVAL)
   {
     lastTempReadTime = currentTime;
     float newTemp = thermocouple.readCelsius();
     if (!isnan(newTemp))
       temperature = newTemp;
+  }
+
+  // 배터리 전압 측정
+  if (currentTime - lastBatteryReadTime >= BATTERY_READ_INTERVAL)
+  {
+    lastBatteryReadTime = currentTime;
+    int adcValue = analogRead(BATTERY_VOLT_PIN);          // 0~4095
+    float voltIn = ((float)adcValue / ADC_MAX) * ADC_REF; // 분배기 하단 전압
+    batteryVoltage = voltIn * VOLTAGE_DIVIDER_RATIO;      // 실제 배터리 전압 계산
   }
 
   if (currentTime - lastRpmCalcTime >= RPM_CALC_INTERVAL)
